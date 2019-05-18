@@ -7,10 +7,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import it.polito.tdp.extflightdelays.model.Airline;
 import it.polito.tdp.extflightdelays.model.Airport;
 import it.polito.tdp.extflightdelays.model.Flight;
+import it.polito.tdp.extflightdelays.model.Rotta;
 
 public class ExtFlightDelaysDAO {
 
@@ -37,7 +39,7 @@ public class ExtFlightDelaysDAO {
 		}
 	}
 
-	public List<Airport> loadAllAirports() {
+	public List<Airport> loadAllAirports(Map<Integer,Airport> aIdMap) {
 		String sql = "SELECT * FROM airports";
 		List<Airport> result = new ArrayList<Airport>();
 
@@ -47,10 +49,16 @@ public class ExtFlightDelaysDAO {
 			ResultSet rs = st.executeQuery();
 
 			while (rs.next()) {
+				
+				if(aIdMap.get(rs.getInt("ID"))==null) {
 				Airport airport = new Airport(rs.getInt("ID"), rs.getString("IATA_CODE"), rs.getString("AIRPORT"),
 						rs.getString("CITY"), rs.getString("STATE"), rs.getString("COUNTRY"), rs.getDouble("LATITUDE"),
 						rs.getDouble("LONGITUDE"), rs.getDouble("TIMEZONE_OFFSET"));
+				aIdMap.put(airport.getId(), airport);
 				result.add(airport);
+				} else {
+					result.add(aIdMap.get(rs.getInt("ID")));
+				}
 			}
 
 			conn.close();
@@ -61,6 +69,37 @@ public class ExtFlightDelaysDAO {
 			System.out.println("Errore connessione al database");
 			throw new RuntimeException("Error Connection Database");
 		}
+	}
+	
+	public List<Rotta> getRotte(Map<Integer,Airport> idMap, int distanzaMedia){
+		
+		String sql = "SELECT origin_airport_id as id1, destination_airport_id as id2, AVG(DISTANCE) AS avgg FROM flights GROUP BY origin_airport_id, destination_airport_id HAVING avgg>?";
+		List<Rotta> result = new ArrayList<>();
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1,  distanzaMedia);
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				Airport partenza = idMap.get(rs.getInt("id1"));
+				Airport destinazione = idMap.get(rs.getInt("id2"));
+				if(partenza==null ||destinazione==null) {
+					throw new RuntimeException("Problema in getRotte");
+				}
+				Rotta rotta = new Rotta(partenza, destinazione, rs.getDouble("avgg"));
+				result.add(rotta);
+			}
+
+			conn.close();
+			return result;
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+		
 	}
 
 }
